@@ -1,0 +1,66 @@
+
+# Bibliotecas -------------------------------------------------------------
+
+library(rvest)
+library(tidyverse)
+library(tm)
+library(lubridate)
+
+
+# Cidades -----------------------------------------------------------------
+
+cities = c("dublin", "cork", "limerick", 'galway', "waterford", 'athlone-and-surrounds-westmeath')
+
+
+# Rent --------------------------------------------------------------------
+
+rent = "https://www.daft.ie/property-for-rent/"
+
+
+# Sharing -----------------------------------------------------------------
+
+sharing = "https://www.daft.ie/sharing/"
+
+
+
+# Teste -------------------------------------------------------------------
+
+# Links das páginas principais
+linksPrincipais <- function(linkbase, condado){
+  
+  link <- paste0(linkbase, condado)
+  pagina <- link %>% read_html()
+
+numero_casas <- pagina %>% 
+  html_nodes('h1') %>% 
+  html_text() %>% 
+  removePunctuation() %>% 
+  str_extract_all("[:digit:]+") %>% 
+  .[[1]] %>% 
+  head(1) %>% 
+  as.numeric()
+
+numero_paginas <- round(numero_casas/20)
+data.frame(LinkGeral = paste0(link, "?pageSize=20&from=", (0:numero_paginas)*20), Cond = condado)
+}
+
+linksGerais <- map2_dfr(.x = rent, .y = cities, .f = ~linksPrincipais(.x, .y))
+
+# Links dos anúncios de cada página
+LinkPaginas <- function(links, cond){
+  
+paginateste <- links %>% read_html()
+
+# paginas Anuncio
+paginasanuncio <- paginateste %>% 
+  html_nodes("li a") %>%
+  html_attr("href") %>% replace_na("") %>% 
+  keep(~str_detect(.x, "/for-rent/")) %>% 
+  paste0("https://www.daft.ie/", .)
+
+data.frame(PagAnuncio = paginasanuncio, Cond = cond)
+}
+
+linksAnuncios <- map2_dfr(.x =  linksGerais %>% pull(LinkGeral),
+                          .y = linksGerais %>% pull(Cond),
+                          .f = ~LinkPaginas(.x, .y))
